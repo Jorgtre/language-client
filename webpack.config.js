@@ -2,7 +2,7 @@ const path = require('path');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 module.exports = {
-    entry: './src/language-server-client.ts',
+    entry: './src/language-client.ts',
     mode: 'development',
     module: {
         rules: [
@@ -17,7 +17,7 @@ module.exports = {
         extensions: ['.tsx', '.ts', '.js']
     },
     output: {
-        filename: 'language-server-client.js',
+        filename: 'language-client.js',
         libraryTarget: 'commonjs',
         path: path.resolve(__dirname, 'out')
     },
