@@ -1,6 +1,9 @@
 import * as ts from 'typescript';
 
-export const enum FileType { File, Directory };
+export const enum FileType {
+    File = 'file',
+    Directory = 'folder',
+};
 
 export interface Diagnostic {
     range: Range;
@@ -11,10 +14,10 @@ export interface Diagnostic {
 }
 
 export enum DiagnosticSeverity {
-    Error = 1,
-    Warning = 2,
-    Information = 3,
-    Hint = 4,
+    Error = 0,
+    Warning = 1,
+    Information = 2,
+    Hint = 3,
 }
 
 export interface Position {
@@ -49,7 +52,7 @@ export interface ResponseMessage<Result = any> extends Message {
      * the case of an error.
      */
     result?: Result;
-    error?: any;
+    error?: ResponseError;
 }
 
 export type Document = string;

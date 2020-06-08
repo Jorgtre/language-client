@@ -1,5 +1,5 @@
 // NOTE: We use isomorphic-ws so that the client compiles for browsers aswell
-import * as WebSocket from 'isomorphic-ws';
+import * as webSocket from 'isomorphic-ws';
 import { Queue } from './queue';
 import * as protocol from './messages';
 import { EventEmitter } from 'events';
@@ -44,11 +44,11 @@ export interface ConnectResult {
 export class LanguageClient {
 
     private _msgCounter = 1;
-    private _socket: WebSocket;
+    private _socket: webSocket;
     private _projectId: string;
     private _eventEmitter: EventEmitter;
     private _cookie: string;
-    private _responseQueue = new Queue<protocol.ResponseMessage>();
+    private _responseQueue = new Queue<protocol.ResponseMessage, protocol.ResponseError | string>();
     private _projectInitialized = false;
 
     constructor() {
@@ -67,12 +67,22 @@ export class LanguageClient {
                 method,
                 params,
             };
-            this._socket.send(JSON.stringify(notification), (err) => {
-                if (err) {
-                    return reject(err);
+            const msg = JSON.stringify(notification);
+            if (isNode) {
+                this._socket.send(msg, (err) => {
+                    if (err) {
+                        return reject(err);
+                    }
+                    return resolve();
+                });
+            } else {
+                try {
+                    (<unknown>this._socket as WebSocket).send(msg);
+                    return resolve();
+                } catch (error) {
+                    return reject(error);
                 }
-                return resolve();
-            });
+            }
         });
     }
 
@@ -93,11 +103,19 @@ export class LanguageClient {
             };
             this._responseQueue.add(id, resolve, reject);
             const json = JSON.stringify(request);
-            this._socket.send(json, (err) => {
-                if (err) {
-                    return this._responseQueue.reject(id, err.toString());
+            if (isNode) {
+                this._socket.send(json, (err) => {
+                    if (err) {
+                        return this._responseQueue.reject(id, err.toString());
+                    }
+                });
+            } else {
+                try {
+                    (<unknown>this._socket as WebSocket).send(json);
+                } catch (error) {
+                    return this._responseQueue.reject(id, error.toString());
                 }
-            });
+            }
         });
 
         return promise;
@@ -163,29 +181,28 @@ export class LanguageClient {
     public async connect(uri: string, cookie?: string): Promise<ConnectResult> {
         const promise = new Promise<ConnectResult>((resolve, reject) => {
             // TODO: WebBrowsers do NOT support options
-            const options: WebSocket.ClientOptions = {
+            const options: webSocket.ClientOptions = {
                 headers: { 'Cookie': cookie || "" },
             };
             // Differentiate whether the client is running in node or the broweser.
             try {
 
                 if (isNode) {
-                    this._socket = new WebSocket(uri, options);
+                    this._socket = new webSocket(uri, options);
                 } else {
-                    this._socket = new WebSocket(uri);
+                    this._socket = new webSocket(uri);
                 }
             } catch (error) {
                 throw error;
             }
 
-            this._socket.onmessage = (event: WebSocket.MessageEvent) => {
+            this._socket.onmessage = (event: webSocket.MessageEvent) => {
                 const message: protocol.ResponseMessage = JSON.parse(event.data.toString());
                 const id = message.id as number;
                 if (message.error) {
                     if (id && this._responseQueue.has(id)) {
                         return this._responseQueue.reject(id, message.error);
                     }
-                    //throw new Error('Failed call: ' + response.error);
                 }
                 if (this._responseQueue.has(id)) {
                     return this._responseQueue.resolve(id, message);
@@ -199,11 +216,11 @@ export class LanguageClient {
                 // TODO(Jorgen): Handle notifications and errors
                 this._eventEmitter.emit(ClientEvent.Errd, message);
             };
-            this._socket.onopen = (event: WebSocket.OpenEvent) => {
+            this._socket.onopen = (event: webSocket.OpenEvent) => {
                 this._eventEmitter.emit(ClientEvent.Connected);
                 resolve({ success: true });
             };
-            this._socket.onclose = (event: WebSocket.CloseEvent) => {
+            this._socket.onclose = (event: webSocket.CloseEvent) => {
                 this._eventEmitter.emit(ClientEvent.Disconnected, {
                     code: event.code,
                     reason: event.reason,
@@ -213,7 +230,7 @@ export class LanguageClient {
                 // @ts-ignore
                 this._projectId = undefined;
             };
-            this._socket.onerror = (event: WebSocket.ErrorEvent) => {
+            this._socket.onerror = (event: webSocket.ErrorEvent) => {
                 resolve({ success: false, error: event });
             };
         });
@@ -272,7 +289,7 @@ export class LanguageClient {
      * @param content The file-content
      * 
      */
-    public async textDocumentChanged(path: string, content: string) {
+    public async textDocumentChanged(path: string, content: string): Promise<void> {
         const params: protocol.TextDocumentChangedParams = {
             projectId: this._projectId,
             content,
@@ -286,7 +303,7 @@ export class LanguageClient {
      * @param path The path to the resouce that was deleted
      * 
      */
-    public async textDocumentDeleted(path: string) {
+    public async textDocumentDeleted(path: string): Promise<void> {
         const params: protocol.TextDocumentDeletedParams = {
             projectId: this._projectId,
             path,
@@ -301,7 +318,7 @@ export class LanguageClient {
      * @param content The content if fileType is file
      * 
      */
-    public async textDocumentCreated(path: string, fileType: protocol.FileType, content: string) {
+    public async textDocumentCreated(path: string, fileType: protocol.FileType, content: string): Promise<void> {
         const params: protocol.TextDocumentCreatedParams = {
             projectId: this._projectId,
             content,
@@ -316,7 +333,7 @@ export class LanguageClient {
      * resulting in the server sending a PublishDiagnostics notification
      * @param path Path
      */
-    public async textDocumentOpened(path: string) {
+    public async textDocumentOpened(path: string): Promise<void> {
         const params: protocol.TextDocumentOpenedParams = {
             projectId: this._projectId,
             path

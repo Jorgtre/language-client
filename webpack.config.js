@@ -18,7 +18,7 @@ module.exports = {
     },
     output: {
         filename: 'language-client.js',
-        libraryTarget: 'commonjs',
+        libraryTarget: 'global',
         path: path.resolve(__dirname, 'out')
     },
     plugins: [

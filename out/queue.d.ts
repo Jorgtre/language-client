@@ -1,14 +1,14 @@
 declare type Resolve<T> = (value: T | PromiseLike<T>) => void;
-declare type Reject = (reason?: string) => void;
-interface ResolveReject<T> {
+declare type Reject<E> = (reason?: E | string) => void;
+interface ResolveReject<T, E> {
     resolve: Resolve<T>;
-    reject: Reject;
+    reject: Reject<E>;
 }
-export declare class Queue<T> {
-    queue: Map<number, ResolveReject<T>>;
-    add(id: number, resolve: Resolve<T>, reject: Reject): void;
+export declare class Queue<T, E> {
+    queue: Map<number, ResolveReject<T, E>>;
+    add(id: number, resolve: Resolve<T>, reject: Reject<E>): void;
     has(id: number): boolean;
     resolve(id: number, value: T): void;
-    reject(id: number, reason: string): void;
+    reject(id: number, reason: E): void;
 }
 export {};

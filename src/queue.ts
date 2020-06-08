@@ -2,18 +2,18 @@ import { ResponseMessage } from "./messages";
 import { resolve } from "path";
 
 type Resolve<T> = (value: T | PromiseLike<T>) => void;
-type Reject = (reason?: string) => void;
+type Reject<E> = (reason?: E | string) => void;
 
-interface ResolveReject<T> {
+interface ResolveReject<T, E> {
     resolve: Resolve<T>;
-    reject: Reject;
+    reject: Reject<E>;
 }
 
-export class Queue<T> {
+export class Queue<T, E> {
 
-    public queue = new Map<number, ResolveReject<T>>();
+    public queue = new Map<number, ResolveReject<T, E>>();
 
-    public add(id: number, resolve: Resolve<T>, reject: Reject) {
+    public add(id: number, resolve: Resolve<T>, reject: Reject<E>) {
         this.queue.set(id, { resolve, reject });
     }
 
@@ -30,7 +30,7 @@ export class Queue<T> {
         this.queue.delete(id);
     }
 
-    public reject(id: number, reason: string) {
+    public reject(id: number, reason: E) {
         const rr = this.queue.get(id);
         if (!rr) {
             return;
