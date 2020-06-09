@@ -1,13 +1,17 @@
 const path = require('path');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const webpack = require('webpack');
 
+/**
+ * @type import('webpack').Configuration
+ */
 module.exports = {
     entry: './src/language-client.ts',
     mode: 'development',
     module: {
         rules: [
             {
-                test: /\.tsx?$/,
+                test: /\.ts?$/,
                 use: 'ts-loader',
                 exclude: /node_modules/
             }
@@ -19,9 +23,9 @@ module.exports = {
     output: {
         filename: 'language-client.js',
         libraryTarget: 'global',
-        path: path.resolve(__dirname, 'out')
+        path: path.resolve(__dirname, 'out'),
     },
     plugins: [
-        new CleanWebpackPlugin(),
+        new CleanWebpackPlugin()
     ],
 };
