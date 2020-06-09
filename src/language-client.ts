@@ -200,12 +200,6 @@ export class LanguageClient {
             this._socket.onmessage = (event: webSocket.MessageEvent) => {
                 const message: protocol.ResponseMessage = JSON.parse(event.data.toString());
                 const id = message.id as number;
-                if (message.error) {
-                    if (id && this._responseQueue.has(id)) {
-                        const err = `JSON-RPC error ${message.error.code} - ${message.error.message}`;
-                        return this._responseQueue.reject(id, err);
-                    }
-                }
                 if (this._responseQueue.has(id)) {
                     return this._responseQueue.resolve(id, message);
                 }
