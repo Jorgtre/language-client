@@ -23,6 +23,7 @@ enum NotificationMethod {
     TextDocumentCreated = 'textDocumentCreated',
     TextDocumentOpened = 'textDocumentOpened',
     Terminate = 'terminate',
+    CancelRequest = 'cancelRequest',
 }
 
 export enum ClientEvent {
@@ -201,7 +202,8 @@ export class LanguageClient {
                 const id = message.id as number;
                 if (message.error) {
                     if (id && this._responseQueue.has(id)) {
-                        return this._responseQueue.reject(id, message.error);
+                        const err = `JSON-RPC error ${message.error.code} - ${message.error.message}`;
+                        return this._responseQueue.reject(id, err);
                     }
                 }
                 if (this._responseQueue.has(id)) {
@@ -252,13 +254,13 @@ export class LanguageClient {
      * @param projectId The projectId to initialize, automatically
      * uses this as the projectId for future calls
      */
-    public async initialize(projectId?: string): Promise<protocol.ResponseMessage<protocol.InitializeResult>> {
+    public async initialize(projectId: string): Promise<protocol.ResponseMessage<protocol.InitializeResult>> {
         this._projectId = projectId || this._projectId;
         if (!this._projectId) {
             throw new Error(`Invalid ProjectId`);
         }
         if (!this.isConnected) {
-            throw new Error('LanguageServerClient not connected');
+            throw new Error('LanguageClient not connected');
         }
         const params: protocol.InitializeParams = { projectId: this._projectId };
         const result = await this._execute<protocol.InitializeResult>(RequestMethod.Initialize, params);
@@ -274,7 +276,7 @@ export class LanguageClient {
      * Also uninitializes the languageClient, requiering initialize to be run again.
      */
     public async terminate() {
-        const params: protocol.TerminateParams = { projectId: this._projectId };
+        const params: protocol.TerminateParams = {};
         // TODO: Find a better way then ts-ignore.....
         // @ts-ignore
         this._projectId = undefined;
@@ -291,7 +293,6 @@ export class LanguageClient {
      */
     public async textDocumentChanged(path: string, content: string): Promise<void> {
         const params: protocol.TextDocumentChangedParams = {
-            projectId: this._projectId,
             content,
             path
         };
@@ -305,7 +306,6 @@ export class LanguageClient {
      */
     public async textDocumentDeleted(path: string): Promise<void> {
         const params: protocol.TextDocumentDeletedParams = {
-            projectId: this._projectId,
             path,
         };
         this._notify(NotificationMethod.TextDocumentDeleted, params);
@@ -320,7 +320,6 @@ export class LanguageClient {
      */
     public async textDocumentCreated(path: string, fileType: protocol.FileType, content: string): Promise<void> {
         const params: protocol.TextDocumentCreatedParams = {
-            projectId: this._projectId,
             content,
             path,
             fileType,
@@ -335,7 +334,6 @@ export class LanguageClient {
      */
     public async textDocumentOpened(path: string): Promise<void> {
         const params: protocol.TextDocumentOpenedParams = {
-            projectId: this._projectId,
             path
         };
         return this._notify(NotificationMethod.TextDocumentOpened, params);
@@ -354,7 +352,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.GetCompletionsResult>> {
         const params: protocol.GetCompletionsParams = {
-            projectId: this._projectId,
             path,
             line,
             character,
@@ -375,7 +372,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.FindReferencesResult>> {
         const params: protocol.GetCompletionsParams = {
-            projectId: this._projectId,
             path,
             line,
             character,
@@ -396,7 +392,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.GetQuickInfoResult>> {
         const params: protocol.GetQuickInfoParams = {
-            projectId: this._projectId,
             path,
             line,
             character,
@@ -416,7 +411,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.GetSignatureHelpResult>> {
         const params: protocol.GetSignatureHelpParams = {
-            projectId: this._projectId,
             line,
             character,
             path,
@@ -435,7 +429,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.GetCompletionEntryDetailsResult>> {
         const params: protocol.GetCompletionEntryDetailsParams = {
-            projectId: this._projectId,
             path,
             line,
             symbol,
@@ -453,7 +446,6 @@ export class LanguageClient {
         character: number,
     ): Promise<protocol.ResponseMessage<protocol.GetDefinitionResult>> {
         const params: protocol.GetDefinitionParams = {
-            projectId: this._projectId,
             character,
             line,
             path,
@@ -468,7 +460,6 @@ export class LanguageClient {
         tabSize: number,
     ): Promise<protocol.ResponseMessage<protocol.GetFormattingEditsResult>> {
         const params: protocol.GetFormattingEditsParams = {
-            projectId: this._projectId,
             path,
             insertSpaces,
             tabSize

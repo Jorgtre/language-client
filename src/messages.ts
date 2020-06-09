@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-export const enum FileType {
+export enum FileType {
     File = 'file',
     Directory = 'folder',
 };
@@ -61,16 +61,16 @@ export type Document = string;
 /* ## Notification Parameters ### */
 /******************************** */
 
-export interface TextDocumentChangedParams extends BaseParams {
+export interface TextDocumentChangedParams {
     path: string;
     content: string;
 }
 
-export interface TextDocumentDeletedParams extends BaseParams {
+export interface TextDocumentDeletedParams {
     path: string;
 }
 
-export interface TextDocumentCreatedParams extends BaseParams {
+export interface TextDocumentCreatedParams {
     path: string;
     /**
      * The content of the document,
@@ -80,71 +80,71 @@ export interface TextDocumentCreatedParams extends BaseParams {
     fileType: FileType;
 }
 
-export interface TextDocumentOpenedParams extends BaseParams {
+export interface TextDocumentOpenedParams {
     path: string;
 }
 
-export interface PublishDiagnosticsParams extends BaseParams {
+export interface PublishDiagnosticsParams {
     path: string;
     diagnostics: Diagnostic[];
 }
 
-export interface TerminateParams extends BaseParams { }
+export interface TerminateParams { }
+
+export interface CancelRequestParams {
+    id: string;
+}
 
 /******************************** */
 /* ##### Request Parameters ##### */
 /******************************** */
 
-export interface BaseParams {
-    projectId: string;
+export interface InitializeParams {
+    projectId: string
 }
 
-export interface InitializeParams extends BaseParams {
-
-}
-
-export interface GetCompletionsParams extends BaseParams {
+export interface GetCompletionsParams {
     path: string;
     line: number;
     character: number;
 }
 
-export interface FindReferencesParams extends BaseParams {
+export interface FindReferencesParams {
     path: string;
     line: number;
     character: number;
 }
 
-export interface GetQuickInfoParams extends BaseParams {
+export interface GetQuickInfoParams {
     path: string;
     line: number;
     character: number;
 }
 
-export interface GetCompletionEntryDetailsParams extends BaseParams {
+export interface GetCompletionEntryDetailsParams {
     path: string;
     line: number;
     character: number;
     symbol: string;
 }
 
-export interface GetSignatureHelpParams extends BaseParams {
+export interface GetSignatureHelpParams {
     path: string;
     line: number;
     character: number;
 }
 
-export interface GetDiagnosticsParams extends BaseParams {
+export interface GetDiagnosticsParams {
     path: string;
 }
 
-export interface GetDefinitionParams extends BaseParams {
+export interface GetDefinitionParams {
     path: string;
     line: number;
     character: number;
 }
 
-export interface GetFormattingEditsParams extends BaseParams {
+export interface GetFormattingEditsParams {
     path: string;
     insertSpaces: boolean;
     tabSize: number;
