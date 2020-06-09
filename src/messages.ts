@@ -92,7 +92,7 @@ export interface PublishDiagnosticsParams {
 export interface TerminateParams { }
 
 export interface CancelRequestParams {
-    id: string;
+    id: string | number;
 }
 
 /******************************** */

@@ -468,4 +468,9 @@ export class LanguageClient {
         return this._execute<protocol.GetFormattingEditsResult>(RequestMethod.GetFormattingEdits, params);
     }
 
+    public async cancelRequest(id: string | number): Promise<void> {
+        const params: protocol.CancelRequestParams = { id };
+        return this._notify(NotificationMethod.CancelRequest, params);
+    }
+
 }
