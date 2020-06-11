@@ -7,7 +7,7 @@ const webpack = require('webpack');
  */
 module.exports = {
     entry: './src/language-client.ts',
-    mode: 'development',
+    mode: 'production',
     module: {
         rules: [
             {

@@ -39,6 +39,8 @@ export interface ConnectResult {
     error?: any;
 }
 
+type Id = string | number;
+
 /**
  * Operates on one project at a time.
  */
@@ -51,6 +53,9 @@ export class LanguageClient {
     private _cookie: string;
     private _responseQueue = new Queue<protocol.ResponseMessage, protocol.ResponseError | string>();
     private _projectInitialized = false;
+
+    // Maps fake ids to actuall message Ids
+    private _idMap = new Map<Id, Id>();
 
     constructor() {
         this._eventEmitter = new EventEmitter();
@@ -93,9 +98,13 @@ export class LanguageClient {
      * @param params Associated parameters to the method
      * 
      */
-    private async _execute<T>(method: RequestMethod, params: any): Promise<protocol.ResponseMessage<T>> {
+    private _execute<T>(method: RequestMethod, params: any, cancellationToken?: Id): Promise<protocol.ResponseMessage<T>> {
+
         const promise = new Promise<protocol.ResponseMessage<T>>(async (resolve, reject) => {
             const id = this._msgCounter++;
+            if (cancellationToken) {
+                this._idMap.set(cancellationToken, id);
+            }
             const request: protocol.RequestMessage = {
                 jsonrpc: "2.0",
                 id,
@@ -129,17 +138,6 @@ export class LanguageClient {
     public on(event: ClientEvent.PublishDiagnostics, listener: (result: protocol.PublishDiagnosticsParams) => void): void;
     public on(event: string, listener: (...args) => void): void {
         this._eventEmitter.on(event, (...args) => listener(...args));
-    }
-
-    /**
-     * @deprecated Used connect(projectId: string) instead
-     * 
-     */
-    public setProjectId(projectId: string) {
-        if (projectId.length < 1) {
-            throw new Error("Invalid projectId");
-        }
-        this._projectId = projectId;
     }
 
     /**
@@ -344,13 +342,15 @@ export class LanguageClient {
         path: string,
         line: number,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetCompletionsResult>> {
         const params: protocol.GetCompletionsParams = {
             path,
             line,
             character,
         };
-        return this._execute<protocol.GetCompletionsResult>(RequestMethod.GetCompletions, params);
+        const promise = this._execute<protocol.GetCompletionsResult>(RequestMethod.GetCompletions, params, cancellationToken);
+        return promise;
     }
 
     /**
@@ -364,13 +364,14 @@ export class LanguageClient {
         path: string,
         line: number,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.FindReferencesResult>> {
         const params: protocol.GetCompletionsParams = {
             path,
             line,
             character,
         };
-        return this._execute<protocol.FindReferencesResult>(RequestMethod.FindReferences, params);
+        return this._execute<protocol.FindReferencesResult>(RequestMethod.FindReferences, params, cancellationToken);
     }
 
     /**
@@ -384,13 +385,14 @@ export class LanguageClient {
         path: string,
         line: number,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetQuickInfoResult>> {
         const params: protocol.GetQuickInfoParams = {
             path,
             line,
             character,
         };
-        return this._execute<protocol.GetQuickInfoResult>(RequestMethod.GetQuickInfo, params);
+        return this._execute<protocol.GetQuickInfoResult>(RequestMethod.GetQuickInfo, params, cancellationToken);
     }
 
     /**
@@ -403,6 +405,7 @@ export class LanguageClient {
         path: string,
         line: number,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetSignatureHelpResult>> {
         const params: protocol.GetSignatureHelpParams = {
             line,
@@ -412,7 +415,8 @@ export class LanguageClient {
 
         return this._execute<protocol.GetSignatureHelpResult>(
             RequestMethod.GetSignatureHelp,
-            params
+            params,
+            cancellationToken,
         );
     }
 
@@ -421,6 +425,7 @@ export class LanguageClient {
         line: number,
         symbol: string,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetCompletionEntryDetailsResult>> {
         const params: protocol.GetCompletionEntryDetailsParams = {
             path,
@@ -430,7 +435,8 @@ export class LanguageClient {
         };
         return this._execute<protocol.GetCompletionEntryDetailsResult>(
             RequestMethod.GetCompletionEntryDetails,
-            params
+            params,
+            cancellationToken
         );
     }
 
@@ -438,6 +444,7 @@ export class LanguageClient {
         path: string,
         line: number,
         character: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetDefinitionResult>> {
         const params: protocol.GetDefinitionParams = {
             character,
@@ -445,13 +452,14 @@ export class LanguageClient {
             path,
         };
 
-        return this._execute<protocol.GetDefinitionResult>(RequestMethod.GetDefinition, params);
+        return this._execute<protocol.GetDefinitionResult>(RequestMethod.GetDefinition, params, cancellationToken);
     }
 
     public async getFormattingEdits(
         path: string,
         insertSpaces: boolean,
         tabSize: number,
+        cancellationToken?: Id,
     ): Promise<protocol.ResponseMessage<protocol.GetFormattingEditsResult>> {
         const params: protocol.GetFormattingEditsParams = {
             path,
@@ -459,11 +467,12 @@ export class LanguageClient {
             tabSize
         };
 
-        return this._execute<protocol.GetFormattingEditsResult>(RequestMethod.GetFormattingEdits, params);
+        return this._execute<protocol.GetFormattingEditsResult>(RequestMethod.GetFormattingEdits, params, cancellationToken);
     }
 
-    public async cancelRequest(id: string | number): Promise<void> {
-        const params: protocol.CancelRequestParams = { id };
+    public async cancelRequest(cancellationToken: Id): Promise<void> {
+        if (!this._idMap.has(cancellationToken)) throw Error("CancellationToken does not exist");
+        const params: protocol.CancelRequestParams = { id: this._idMap.get(cancellationToken) };
         return this._notify(NotificationMethod.CancelRequest, params);
     }
 
