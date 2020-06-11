@@ -22,7 +22,7 @@ module.exports = {
     },
     output: {
         filename: 'language-client.js',
-        libraryTarget: 'global',
+        libraryTarget: 'commonjs',
         path: path.resolve(__dirname, 'out'),
     },
     plugins: [
