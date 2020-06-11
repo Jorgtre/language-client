@@ -11,17 +11,17 @@ interface ResolveReject<T, E> {
 
 export class Queue<T, E> {
 
-    public queue = new Map<number, ResolveReject<T, E>>();
+    public queue = new Map<number | string, ResolveReject<T, E>>();
 
-    public add(id: number, resolve: Resolve<T>, reject: Reject<E>) {
+    public add(id: number | string, resolve: Resolve<T>, reject: Reject<E>) {
         this.queue.set(id, { resolve, reject });
     }
 
-    public has(id: number): boolean {
+    public has(id: number | string): boolean {
         return this.queue.has(id);
     }
 
-    public resolve(id: number, value: T) {
+    public resolve(id: number | string, value: T) {
         const rr = this.queue.get(id);
         if (!rr) {
             return;
@@ -30,7 +30,7 @@ export class Queue<T, E> {
         this.queue.delete(id);
     }
 
-    public reject(id: number, reason: E) {
+    public reject(id: number | string, reason: E) {
         const rr = this.queue.get(id);
         if (!rr) {
             return;

@@ -46,16 +46,13 @@ type Id = string | number;
  */
 export class LanguageClient {
 
-    private _msgCounter = 1;
+    private _requestCounter = 1;
     private _socket: webSocket;
     private _projectId: string;
     private _eventEmitter: EventEmitter;
     private _cookie: string;
     private _responseQueue = new Queue<protocol.ResponseMessage, protocol.ResponseError | string>();
     private _projectInitialized = false;
-
-    // Maps fake ids to actuall message Ids
-    private _idMap = new Map<Id, Id>();
 
     constructor() {
         this._eventEmitter = new EventEmitter();
@@ -101,29 +98,26 @@ export class LanguageClient {
     private _execute<T>(method: RequestMethod, params: any, cancellationToken?: Id): Promise<protocol.ResponseMessage<T>> {
 
         const promise = new Promise<protocol.ResponseMessage<T>>(async (resolve, reject) => {
-            const id = this._msgCounter++;
-            if (cancellationToken) {
-                this._idMap.set(cancellationToken, id);
-            }
+            const requestId = cancellationToken || this._requestCounter++;
             const request: protocol.RequestMessage = {
                 jsonrpc: "2.0",
-                id,
+                id: requestId,
                 method,
                 params,
             };
-            this._responseQueue.add(id, resolve, reject);
+            this._responseQueue.add(requestId, resolve, reject);
             const json = JSON.stringify(request);
             if (isNode) {
                 this._socket.send(json, (err) => {
                     if (err) {
-                        return this._responseQueue.reject(id, err.toString());
+                        return this._responseQueue.reject(requestId, err.toString());
                     }
                 });
             } else {
                 try {
                     (<unknown>this._socket as WebSocket).send(json);
                 } catch (error) {
-                    return this._responseQueue.reject(id, error.toString());
+                    return this._responseQueue.reject(requestId, error.toString());
                 }
             }
         });
@@ -196,15 +190,16 @@ export class LanguageClient {
             }
 
             this._socket.onmessage = (event: webSocket.MessageEvent) => {
-                const message: protocol.ResponseMessage = JSON.parse(event.data.toString());
-                const id = message.id as number;
-                if (this._responseQueue.has(id)) {
-                    return this._responseQueue.resolve(id, message);
-                }
+                const message: protocol.ResponseMessage | protocol.NotificationMessage = JSON.parse(event.data.toString());
 
                 // Handle notifications that we recieve from the server
                 if (is.notification(message)) {
                     return this._eventEmitter.emit(message.method, message.params);
+                }
+
+                const id = message.id as number;
+                if (this._responseQueue.has(id)) {
+                    return this._responseQueue.resolve(id, message);
                 }
 
                 // TODO(Jorgen): Handle notifications and errors
@@ -471,8 +466,8 @@ export class LanguageClient {
     }
 
     public async cancelRequest(cancellationToken: Id): Promise<void> {
-        if (!this._idMap.has(cancellationToken)) throw Error("CancellationToken does not exist");
-        const params: protocol.CancelRequestParams = { id: this._idMap.get(cancellationToken) };
+        if (!this._responseQueue.has(cancellationToken)) throw Error("CancellationToken does not exist");
+        const params: protocol.CancelRequestParams = { id: cancellationToken };
         return this._notify(NotificationMethod.CancelRequest, params);
     }
 
