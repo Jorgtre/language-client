@@ -39,14 +39,17 @@ export interface ConnectResult {
     error?: any;
 }
 
-type Id = string | number;
+export interface Cancellable<T> {
+    cancel: () => Promise<void>;
+    wait: () => Promise<T>;
+}
 
 /**
  * Operates on one project at a time.
  */
 export class LanguageClient {
 
-    private _requestCounter = 1;
+    private _msgCounter = 1;
     private _socket: webSocket;
     private _projectId: string;
     private _eventEmitter: EventEmitter;
@@ -95,10 +98,9 @@ export class LanguageClient {
      * @param params Associated parameters to the method
      * 
      */
-    private _execute<T>(method: RequestMethod, params: any, cancellationToken?: Id): Promise<protocol.ResponseMessage<T>> {
-
+    private _execute<T>(method: RequestMethod, params: any): Promise<protocol.ResponseMessage<T>> {
+        const requestId = this._msgCounter++;
         const promise = new Promise<protocol.ResponseMessage<T>>(async (resolve, reject) => {
-            const requestId = cancellationToken || this._requestCounter++;
             const request: protocol.RequestMessage = {
                 jsonrpc: "2.0",
                 id: requestId,
@@ -123,6 +125,43 @@ export class LanguageClient {
         });
 
         return promise;
+    }
+
+    private _executeCancellable<T>(method: RequestMethod, params: any): Cancellable<protocol.ResponseMessage<T>> {
+        const requestId = this._msgCounter++;
+        const promise = new Promise<protocol.ResponseMessage<T>>(async (resolve, reject) => {
+            const request: protocol.RequestMessage = {
+                jsonrpc: "2.0",
+                id: requestId,
+                method,
+                params,
+            };
+            this._responseQueue.add(requestId, resolve, reject);
+            const json = JSON.stringify(request);
+            if (isNode) {
+                this._socket.send(json, (err) => {
+                    if (err) {
+                        return this._responseQueue.reject(requestId, err.toString());
+                    }
+                });
+            } else {
+                try {
+                    (<unknown>this._socket as WebSocket).send(json);
+                } catch (error) {
+                    return this._responseQueue.reject(requestId, error.toString());
+                }
+            }
+        });
+
+        return {
+            wait: async () => promise,
+            cancel: async () => this._cancel(requestId)
+        };
+    }
+
+    private async _cancel(id: string | number) {
+        const params: protocol.CancelRequestParams = { id };
+        return this._notify(NotificationMethod.CancelRequest, params);
     }
 
     public on(event: ClientEvent.Connected, listener: () => void): void;
@@ -190,16 +229,15 @@ export class LanguageClient {
             }
 
             this._socket.onmessage = (event: webSocket.MessageEvent) => {
-                const message: protocol.ResponseMessage | protocol.NotificationMessage = JSON.parse(event.data.toString());
+                const message: protocol.ResponseMessage = JSON.parse(event.data.toString());
+                const id = message.id as number;
+                if (this._responseQueue.has(id)) {
+                    return this._responseQueue.resolve(id, message);
+                }
 
                 // Handle notifications that we recieve from the server
                 if (is.notification(message)) {
                     return this._eventEmitter.emit(message.method, message.params);
-                }
-
-                const id = message.id as number;
-                if (this._responseQueue.has(id)) {
-                    return this._responseQueue.resolve(id, message);
                 }
 
                 // TODO(Jorgen): Handle notifications and errors
@@ -333,19 +371,17 @@ export class LanguageClient {
      * @param line 0-based linenumber
      * @param character 0-based character index
      */
-    public async getCompletions(
+    public getCompletions(
         path: string,
         line: number,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetCompletionsResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetCompletionsResult>> {
         const params: protocol.GetCompletionsParams = {
             path,
             line,
             character,
         };
-        const promise = this._execute<protocol.GetCompletionsResult>(RequestMethod.GetCompletions, params, cancellationToken);
-        return promise;
+        return this._executeCancellable<protocol.GetCompletionsResult>(RequestMethod.GetCompletions, params);
     }
 
     /**
@@ -355,18 +391,17 @@ export class LanguageClient {
      * @param line 0-based linenumber
      * @param character 0-based character index
      */
-    public async findReferences(
+    public findReferences(
         path: string,
         line: number,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.FindReferencesResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.FindReferencesResult>> {
         const params: protocol.GetCompletionsParams = {
             path,
             line,
             character,
         };
-        return this._execute<protocol.FindReferencesResult>(RequestMethod.FindReferences, params, cancellationToken);
+        return this._executeCancellable<protocol.FindReferencesResult>(RequestMethod.FindReferences, params);
     }
 
     /**
@@ -376,18 +411,17 @@ export class LanguageClient {
      * @param line 0-based linenumber
      * @param character 0-based character index
      */
-    public async getQuickInfo(
+    public getQuickInfo(
         path: string,
         line: number,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetQuickInfoResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetQuickInfoResult>> {
         const params: protocol.GetQuickInfoParams = {
             path,
             line,
             character,
         };
-        return this._execute<protocol.GetQuickInfoResult>(RequestMethod.GetQuickInfo, params, cancellationToken);
+        return this._executeCancellable<protocol.GetQuickInfoResult>(RequestMethod.GetQuickInfo, params);
     }
 
     /**
@@ -396,79 +430,67 @@ export class LanguageClient {
      * @param line 0-based line number
      * @param character 0-based character index
      */
-    public async getSignatureHelp(
+    public getSignatureHelp(
         path: string,
         line: number,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetSignatureHelpResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetSignatureHelpResult>> {
         const params: protocol.GetSignatureHelpParams = {
             line,
             character,
             path,
         };
 
-        return this._execute<protocol.GetSignatureHelpResult>(
+        return this._executeCancellable<protocol.GetSignatureHelpResult>(
             RequestMethod.GetSignatureHelp,
-            params,
-            cancellationToken,
+            params
         );
     }
 
-    public async getCompletionEntryDetails(
+    public getCompletionEntryDetails(
         path: string,
         line: number,
         symbol: string,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetCompletionEntryDetailsResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetCompletionEntryDetailsResult>> {
         const params: protocol.GetCompletionEntryDetailsParams = {
             path,
             line,
             symbol,
             character,
         };
-        return this._execute<protocol.GetCompletionEntryDetailsResult>(
+        return this._executeCancellable<protocol.GetCompletionEntryDetailsResult>(
             RequestMethod.GetCompletionEntryDetails,
-            params,
-            cancellationToken
+            params
         );
     }
 
-    public async getDefinition(
+    public getDefinition(
         path: string,
         line: number,
         character: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetDefinitionResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetDefinitionResult>> {
         const params: protocol.GetDefinitionParams = {
             character,
             line,
             path,
         };
 
-        return this._execute<protocol.GetDefinitionResult>(RequestMethod.GetDefinition, params, cancellationToken);
+        return this._executeCancellable<protocol.GetDefinitionResult>(RequestMethod.GetDefinition, params);
     }
 
-    public async getFormattingEdits(
+    public getFormattingEdits(
         path: string,
         insertSpaces: boolean,
         tabSize: number,
-        cancellationToken?: Id,
-    ): Promise<protocol.ResponseMessage<protocol.GetFormattingEditsResult>> {
+    ): Cancellable<protocol.ResponseMessage<protocol.GetFormattingEditsResult>> {
         const params: protocol.GetFormattingEditsParams = {
             path,
             insertSpaces,
             tabSize
         };
 
-        return this._execute<protocol.GetFormattingEditsResult>(RequestMethod.GetFormattingEdits, params, cancellationToken);
-    }
-
-    public async cancelRequest(cancellationToken: Id): Promise<void> {
-        if (!this._responseQueue.has(cancellationToken)) throw Error("CancellationToken does not exist");
-        const params: protocol.CancelRequestParams = { id: cancellationToken };
-        return this._notify(NotificationMethod.CancelRequest, params);
+        return this._executeCancellable<protocol.GetFormattingEditsResult>(RequestMethod.GetFormattingEdits, params);
     }
 
 }
