@@ -19,6 +19,7 @@ enum RequestMethod {
 
 enum NotificationMethod {
     TextDocumentChanged = 'textDocumentChanged',
+    TextDocumentPartiallyChanged = 'textDocumentPartiallyChanged',
     TextDocumentDeleted = 'textDocumentDeleted',
     TextDocumentCreated = 'textDocumentCreated',
     TextDocumentOpened = 'textDocumentOpened',
@@ -322,6 +323,11 @@ export class LanguageClient {
             path
         };
         return this._notify(NotificationMethod.TextDocumentChanged, params);
+    }
+
+    public textDocumentPartiallyChanged(path: string, newText: string, start: number, end: number) {
+        const params: protocol.TextDocumentPartiallyChangedParams = { path, newText, start, end };
+        return this._notify(NotificationMethod.TextDocumentPartiallyChanged, params);
     }
 
     /**
